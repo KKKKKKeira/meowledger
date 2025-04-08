@@ -1,3 +1,4 @@
+
 import os
 import gspread
 import json
@@ -15,7 +16,6 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
 
-# 建立憑證檔案
 gcred_json_str = os.getenv("GCRED_JSON")
 with open("gcred.json", "w") as f:
     f.write(gcred_json_str)
@@ -60,16 +60,23 @@ def format_monthly_report(income, expense, budget, records):
     for i, (date, kind, item, amount) in enumerate(records):
         sign = "+" if kind == "收入" else "-"
         lines.append(f"{i+1}. {date}｜{item}｜{sign}{amount}")
-    detail = "\n".join(lines) if lines else "（這個月還沒有紀錄喵）"
-    report = f"📅 收入：{income} 元\n💸 支出：{expense} 元"
+    detail = "
+".join(lines) if lines else "（這個月還沒有紀錄喵）"
+    report = f"📅 收入：{income} 元
+💸 支出：{expense} 元"
     if budget > 0:
         percent = round(expense / budget * 100)
-        report += f"\n🎯 預算：{budget} 元（已使用 {percent}%）"
+        report += f"
+🎯 預算：{budget} 元（已使用 {percent}%）"
         if percent >= 80:
-            report += f"\n⚠️ {random.choice(over_80_quotes)}"
+            report += f"
+⚠️ {random.choice(over_80_quotes)}"
         elif percent >= 50:
-            report += f"\n😿 {random.choice(over_50_quotes)}"
-    return report + "\n\n" + detail
+            report += f"
+😿 {random.choice(over_50_quotes)}"
+    return report + "
+
+" + detail
 
 success_quotes = [
     "已記下來了喵，希望不是亂花錢 QQ",
@@ -99,42 +106,46 @@ def handle_message(event):
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
 
-    # 模糊查詢
+    # 查詢明細
     if re.search(r"(查詢|明細|帳目|看一下)", msg):
         match = re.search(r"(\d{4})-(\d{2})", msg)
         month_prefix = match.group() if match else year_month
         income, expense, budget, records = get_month_records(uid, month_prefix)
         reply = format_monthly_report(income, expense, budget, records)
 
-    elif msg.startswith("預算"):
-        parts = msg.split()
-        if len(parts) == 2 and parts[1].isdigit():
-            sheet.append_row([today, "預算", "本月預算", parts[1], uid])
-            reply = f"喵～我幫妳把這個月的預算記成 {parts[1]} 元了！"
+    # 預算設定（模糊抓）
+    elif "預算" in msg:
+        match = re.search(r"預算\s*(\d+)", msg)
+        if match:
+            amount = match.group(1)
+            sheet.append_row([today, "預算", "本月預算", amount, uid])
+            reply = f"喵～我幫妳把這個月的預算記成 {amount} 元了！"
         else:
-            reply = "請用「預算 20000」這種格式設定喵～"
+            reply = "請用「預算 20000」這樣的格式喵～"
 
-    elif msg.startswith("刪除第") or msg.startswith("刪除 "):
-        match = re.search(r"(\d+)", msg)
-        if not match:
-            reply = "喵？請用「刪除第3筆」或「刪除 2」這種格式喔"
+    # 刪除多筆
+    elif msg.startswith("刪除"):
+        numbers = re.findall(r"\d+", msg)
+        deleted = []
+        all_rows = sheet.get_all_values()
+        user_rows = [i for i, row in enumerate(all_rows[1:], start=2)
+                     if row[4] == uid and row[0].startswith(year_month)]
+        for num in sorted(set(map(int, numbers)), reverse=True):
+            idx = num - 1
+            if 0 <= idx < len(user_rows):
+                sheet.delete_rows(user_rows[idx])
+                deleted.append(num)
+        if deleted:
+            reply = f"我幫妳刪掉第 {', '.join(map(str, sorted(deleted)))} 筆紀錄了喵～"
         else:
-            target_idx = int(match.group()) - 1
-            all_rows = sheet.get_all_values()
-            user_rows = [i for i, row in enumerate(all_rows[1:], start=2)
-                         if row[4] == uid and row[0].startswith(year_month)]
-            if 0 <= target_idx < len(user_rows):
-                sheet.delete_rows(user_rows[target_idx])
-                reply = f"第 {target_idx+1} 筆我幫妳刪掉了喵…希望不是重要回憶 QQ"
-            else:
-                reply = "喵…那筆編號找不到耶，請再確認一下～"
+            reply = "找不到這些筆數喵，請再確認一下～"
 
+    # 記帳邏輯
     else:
-        # 判斷是否為支出/收入或懶人輸入
         date = today
         kind, item, amount = None, "懶得寫", None
 
-        # 支援指定日期
+        # 指定日期
         date_match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2})", msg)
         if date_match:
             date_str = date_match.group()
@@ -145,16 +156,25 @@ def handle_message(event):
             else:
                 date = date_str
 
-        if re.match(r"^[-+]?\d+", msg):
-            if msg.startswith("-"):
-                kind = "支出"
-                amount = int(msg)
-            elif msg.startswith("+"):
-                kind = "收入"
-                amount = int(msg[1:])
-            else:
-                kind = "支出"
-                amount = int(msg)
+        # 支援 +200、-300、洗頭 -200、加班費 +1500
+        if re.match(r"^[-+]\d+", msg):
+            kind = "收入" if msg.startswith("+") else "支出"
+            amount = int(msg)
+        elif re.match(r"^[一-龥]+\s*[-+]\d+", msg):
+            parts = msg.split()
+            item = parts[0]
+            amount = int(parts[1])
+            kind = "收入" if "+" in parts[1] else "支出"
+        elif re.match(r"^[一-龥]+\d+", msg):  # 例如 洗頭300
+            match = re.match(r"([一-龥]+)(\d+)", msg)
+            item = match.group(1)
+            amount = int(match.group(2))
+            kind = "支出"
+            reply = f"這應該是支出吧？如果是收入再請輸入收入兩個字我就知道囉！
+我先幫妳記下來囉：{item} -{amount} 元"
+            sheet.append_row([date, kind, item, amount, uid])
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+            return
         else:
             parts = msg.split()
             if parts[0] in ["支出", "收入"]:
@@ -164,10 +184,10 @@ def handle_message(event):
                 elif len(parts) >= 3 and parts[2].isdigit():
                     item = parts[1]
                     amount = int(parts[2])
-            elif len(parts) == 2 and parts[0].lstrip("+-").isdigit():
+            elif len(parts) == 2 and parts[0].isdigit():
                 amount = int(parts[0])
-                kind = "收入" if "+" in parts[0] else "支出"
                 item = parts[1]
+                kind = "支出"
 
         if kind and amount:
             sheet.append_row([date, kind, item, abs(amount), uid])
