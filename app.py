@@ -39,13 +39,14 @@ def get_month_records(user_id, month_prefix):
     all_rows = sheet.get_all_values()[1:]
     records = []
     income, expense = 0, 0
-    budget = 0
+    budget_rows = []
+
     for row in all_rows:
         date, kind, item, amount, uid = row
         if uid != user_id:
             continue
         if kind == "預算" and date.startswith(month_prefix):
-            budget = int(amount)
+            budget_rows.append(int(amount))
         elif date.startswith(month_prefix):
             amount = int(amount)
             records.append((date, kind, item, amount))
@@ -53,7 +54,10 @@ def get_month_records(user_id, month_prefix):
                 income += amount
             elif kind == "支出":
                 expense += amount
+
+    budget = budget_rows[-1] if budget_rows else 0
     return income, expense, budget, records
+
 
 def format_monthly_report(income, expense, budget, records):
     lines = []
@@ -118,9 +122,10 @@ def handle_message(event):
 
     # 刪除多筆
     elif msg.startswith("刪除"):
-    numbers = re.findall(r"\d+", msg)
-    deleted = []
-    all_rows = sheet.get_all_values()
+        numbers = re.findall(r"\d+", msg)
+        deleted = []
+        all_rows = sheet.get_all_values()
+
 
     # 使用者自己當月的紀錄（含 row index）
     user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
