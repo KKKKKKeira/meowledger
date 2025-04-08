@@ -62,12 +62,11 @@ def handle_message(event):
                 elif kind == "支出":
                     total_out += amount
                     details.append(f"{date}｜{item}｜-{amount}")
-        detail_text = "
-".join(details[-10:] or ["（本月還沒花錢喵）"])
-        reply = f"📅 本月收入：{total_in} 元
-💸 支出：{total_out} 元
-
-{detail_text}"
+        if details:
+            detail_text = "\n".join(details[-10:])
+        else:
+            detail_text = "（本月還沒花錢喵）"
+        reply = f"📅 本月收入：{total_in} 元\n💸 支出：{total_out} 元\n\n{detail_text}"
     else:
         reply = "喵？我目前只懂「支出 飲料 50」或「查詢本月」這種訊息喔～"
 
