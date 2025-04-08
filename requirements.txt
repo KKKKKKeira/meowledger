@@ -1,4 +1,4 @@
-flask
-line-bot-sdk
-gspread
-oauth2client
+flask==2.3.2
+line-bot-sdk==2.4.1
+gspread==5.12.0
+oauth2client==4.1.3
