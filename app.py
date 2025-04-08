@@ -118,20 +118,32 @@ def handle_message(event):
 
     # 刪除多筆
     elif msg.startswith("刪除"):
-        numbers = re.findall(r"\d+", msg)
-        deleted = []
-        all_rows = sheet.get_all_values()
-        user_rows = [i for i, row in enumerate(all_rows[1:], start=2)
-                     if row[4] == uid and row[0].startswith(year_month)]
-        for num in sorted(set(map(int, numbers)), reverse=True):
-            idx = num - 1
-            if 0 <= idx < len(user_rows):
-                sheet.delete_rows(user_rows[idx])
-                deleted.append(num)
-        if deleted:
-            reply = f"我幫妳刪掉第 {', '.join(map(str, sorted(deleted)))} 筆紀錄了喵～"
-        else:
-            reply = "找不到這些筆數喵，請再確認一下～"
+    numbers = re.findall(r"\d+", msg)
+    deleted = []
+    all_rows = sheet.get_all_values()
+
+    # 使用者自己當月的紀錄（含 row index）
+    user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
+                 if row[4] == uid and row[0].startswith(year_month) and row[1] != "預算"]  # 不刪預算！
+
+    # 抓到要刪除的 row 實際 index
+    to_delete = []
+    for num in sorted(set(map(int, numbers))):
+        idx = num - 1
+        if 0 <= idx < len(user_rows):
+            row_idx = user_rows[idx][0]
+            to_delete.append((num, row_idx))
+
+    # 實際從 Google Sheet 刪除（由大到小刪）
+    for _, row_idx in sorted(to_delete, key=lambda x: x[1], reverse=True):
+        sheet.delete_rows(row_idx)
+
+    if to_delete:
+        nums = [str(n) for n, _ in to_delete]
+        reply = f"我幫妳刪掉第 {', '.join(nums)} 筆紀錄了喵～"
+    else:
+        reply = "找不到這些筆數喵，請再確認一下～"
+
 
     # 記帳邏輯
     else:
