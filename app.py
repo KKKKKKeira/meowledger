@@ -60,23 +60,16 @@ def format_monthly_report(income, expense, budget, records):
     for i, (date, kind, item, amount) in enumerate(records):
         sign = "+" if kind == "收入" else "-"
         lines.append(f"{i+1}. {date}｜{item}｜{sign}{amount}")
-    detail = "
-".join(lines) if lines else "（這個月還沒有紀錄喵）"
-    report = f"📅 收入：{income} 元
-💸 支出：{expense} 元"
+    detail = "\n".join(lines) if lines else "（這個月還沒有紀錄喵）"
+    report = f"📅 收入：{income} 元\n💸 支出：{expense} 元"
     if budget > 0:
         percent = round(expense / budget * 100)
-        report += f"
-🎯 預算：{budget} 元（已使用 {percent}%）"
+        report += f"\n🎯 預算：{budget} 元（已使用 {percent}%）"
         if percent >= 80:
-            report += f"
-⚠️ {random.choice(over_80_quotes)}"
+            report += f"\n⚠️ {random.choice(over_80_quotes)}"
         elif percent >= 50:
-            report += f"
-😿 {random.choice(over_50_quotes)}"
-    return report + "
-
-" + detail
+            report += f"\n😿 {random.choice(over_50_quotes)}"
+    return report + "\n\n" + detail
 
 success_quotes = [
     "已記下來了喵，希望不是亂花錢 QQ",
