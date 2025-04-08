@@ -1,5 +1,6 @@
 import os
 import gspread
+import json
 from datetime import datetime
 from flask import Flask, request, abort
 from oauth2client.service_account import ServiceAccountCredentials
@@ -12,6 +13,11 @@ app = Flask(__name__)
 # LINE Bot 認證
 line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
+
+# 將 gcred.json 內容從環境變數寫入暫存檔
+gcred_json_str = os.getenv("GCRED_JSON")
+with open("gcred.json", "w") as f:
+    f.write(gcred_json_str)
 
 # Google Sheet 連線設定
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
