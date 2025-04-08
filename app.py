@@ -65,14 +65,11 @@ def format_monthly_report(income, expense, budget, records):
 💸 支出：{expense} 元"
     if budget > 0:
         percent = round(expense / budget * 100)
-        report += f"
-🎯 預算：{budget} 元（已使用 {percent}%）"
+        report += f"\n🎯 預算：{budget} 元（已使用 {percent}%）"
         if percent >= 80:
-            report += f"
-⚠️ {random.choice(over_80_quotes)}"
+            report += f"\n⚠️ {random.choice(over_80_quotes)}"
         elif percent >= 50:
-            report += f"
-😿 {random.choice(over_50_quotes)}"
+            report += f"\n😿 {random.choice(over_50_quotes)}"
     return report + "
 
 " + detail
@@ -120,7 +117,7 @@ def handle_message(event):
             sheet.append_row([today, "預算", "本月預算", amount, uid])
             reply = f"喵～我幫妳把這個月的預算記成 {amount} 元了！"
         else:
-            reply = "請用「預算 xxxxx」這樣的格式喵～"
+            reply = "請用「預算 20000」這樣的格式喵～"
 
     # 刪除多筆
     elif msg.startswith("刪除"):
