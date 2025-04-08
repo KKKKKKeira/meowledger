@@ -60,17 +60,16 @@ def format_monthly_report(income, expense, budget, records):
     for i, (date, kind, item, amount) in enumerate(records):
         sign = "+" if kind == "收入" else "-"
         lines.append(f"{i+1}. {date}｜{item}｜{sign}{amount}")
-    detail = "
-".join(lines) if lines else "（這個月還沒有紀錄喵）"
-report = f"📅 收入：{income} 元\n💸 支出：{expense} 元"
-if budget > 0:
-    percent = round(expense / budget * 100)
-    report += f"\n🎯 預算：{budget} 元（已使用 {percent}%）"
-    if percent >= 80:
-        report += f"\n⚠️ {random.choice(over_80_quotes)}"
-    elif percent >= 50:
-        report += f"\n😿 {random.choice(over_50_quotes)}"
-return report + "\n\n" + detail
+    detail = "\n".join(lines) if lines else "（這個月還沒有紀錄喵）"
+    report = f"📅 收入：{income} 元\n💸 支出：{expense} 元"
+    if budget > 0:
+        percent = round(expense / budget * 100)
+        report += f"\n🎯 預算：{budget} 元（已使用 {percent}%）"
+        if percent >= 80:
+            report += f"\n⚠️ {random.choice(over_80_quotes)}"
+        elif percent >= 50:
+            report += f"\n😿 {random.choice(over_50_quotes)}"
+    return report + "\n\n" + detail
 
 success_quotes = [
     "已記下來了喵，希望不是亂花錢 QQ",
@@ -164,8 +163,7 @@ def handle_message(event):
             item = match.group(1)
             amount = int(match.group(2))
             kind = "支出"
-            reply = f"這應該是支出吧？如果是收入再請輸入收入兩個字我就知道囉！
-我先幫妳記下來囉：{item} -{amount} 元"
+            reply = f"這應該是支出吧？如果是收入再請輸入收入兩個字我就知道囉！\n我先幫妳記下來囉：{item} -{amount} 元"
             sheet.append_row([date, kind, item, amount, uid])
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
             return
