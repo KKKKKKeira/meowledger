@@ -60,8 +60,7 @@ def format_monthly_report(income, expense, budget, records):
     for i, (date, kind, item, amount) in enumerate(records):
         sign = "+" if kind == "收入" else "-"
         lines.append(f"{i+1}. {date}｜{item}｜{sign}{amount}")
-    detail = "
-".join(lines) if lines else "（這個月還沒有紀錄喵）"
+    detail = "\n".join(lines) if lines else "（這個月還沒有紀錄喵）"
     report = f"📅 收入：{income} 元
 💸 支出：{expense} 元"
     if budget > 0:
@@ -121,7 +120,7 @@ def handle_message(event):
             sheet.append_row([today, "預算", "本月預算", amount, uid])
             reply = f"喵～我幫妳把這個月的預算記成 {amount} 元了！"
         else:
-            reply = "請用「預算 20000」這樣的格式喵～"
+            reply = "請用「預算 xxxxx」這樣的格式喵～"
 
     # 刪除多筆
     elif msg.startswith("刪除"):
