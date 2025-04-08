@@ -1,4 +1,3 @@
-
 import os
 import gspread
 import json
@@ -58,7 +57,6 @@ def get_month_records(user_id, month_prefix):
     budget = budget_rows[-1] if budget_rows else 0
     return income, expense, budget, records
 
-
 def format_monthly_report(income, expense, budget, records):
     lines = []
     for i, (date, kind, item, amount) in enumerate(records):
@@ -103,14 +101,12 @@ def handle_message(event):
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
 
-    # 查詢明細
     if re.search(r"(查詢|明細|帳目|看一下)", msg):
         match = re.search(r"(\d{4})-(\d{2})", msg)
         month_prefix = match.group() if match else year_month
         income, expense, budget, records = get_month_records(uid, month_prefix)
         reply = format_monthly_report(income, expense, budget, records)
 
-    # 預算設定（模糊抓）
     elif "預算" in msg:
         match = re.search(r"預算\s*(\d+)", msg)
         if match:
@@ -120,43 +116,33 @@ def handle_message(event):
         else:
             reply = "請用「預算 20000」這樣的格式喵～"
 
-    # 刪除多筆
     elif msg.startswith("刪除"):
         numbers = re.findall(r"\d+", msg)
-        deleted = []
         all_rows = sheet.get_all_values()
 
+        user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
+                     if row[4] == uid and row[0].startswith(year_month) and row[1] != "預算"]
 
-    # 使用者自己當月的紀錄（含 row index）
-    user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
-                 if row[4] == uid and row[0].startswith(year_month) and row[1] != "預算"]  # 不刪預算！
+        to_delete = []
+        for num in sorted(set(map(int, numbers))):
+            idx = num - 1
+            if 0 <= idx < len(user_rows):
+                row_idx = user_rows[idx][0]
+                to_delete.append((num, row_idx))
 
-    # 抓到要刪除的 row 實際 index
-    to_delete = []
-    for num in sorted(set(map(int, numbers))):
-        idx = num - 1
-        if 0 <= idx < len(user_rows):
-            row_idx = user_rows[idx][0]
-            to_delete.append((num, row_idx))
+        for _, row_idx in sorted(to_delete, key=lambda x: x[1], reverse=True):
+            sheet.delete_rows(row_idx)
 
-    # 實際從 Google Sheet 刪除（由大到小刪）
-    for _, row_idx in sorted(to_delete, key=lambda x: x[1], reverse=True):
-        sheet.delete_rows(row_idx)
+        if to_delete:
+            nums = [str(n) for n, _ in to_delete]
+            reply = f"我幫妳刪掉第 {', '.join(nums)} 筆紀錄了喵～"
+        else:
+            reply = "找不到這些筆數喵，請再確認一下～"
 
-    if to_delete:
-        nums = [str(n) for n, _ in to_delete]
-        reply = f"我幫妳刪掉第 {', '.join(nums)} 筆紀錄了喵～"
-    else:
-        reply = "找不到這些筆數喵，請再確認一下～"
-
-
-
-    # 記帳邏輯
     else:
         date = today
         kind, item, amount = None, "懶得寫", None
 
-        # 指定日期
         date_match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2})", msg)
         if date_match:
             date_str = date_match.group()
@@ -167,7 +153,6 @@ def handle_message(event):
             else:
                 date = date_str
 
-        # 支援 +200、-300、洗頭 -200、加班費 +1500
         if re.match(r"^[-+]\d+", msg):
             kind = "收入" if msg.startswith("+") else "支出"
             amount = int(msg)
@@ -176,7 +161,7 @@ def handle_message(event):
             item = parts[0]
             amount = int(parts[1])
             kind = "收入" if "+" in parts[1] else "支出"
-        elif re.match(r"^[一-龥]+\d+", msg):  # 例如 洗頭300
+        elif re.match(r"^[一-龥]+\d+", msg):
             match = re.match(r"([一-龥]+)(\d+)", msg)
             item = match.group(1)
             amount = int(match.group(2))
