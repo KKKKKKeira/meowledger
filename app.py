@@ -24,6 +24,16 @@ credentials = ServiceAccountCredentials.from_json_keyfile_name("gcred.json", sco
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(os.getenv("SHEET_ID")).sheet1
 
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    signature = request.headers["X-Line-Signature"]
+    body = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+    return "OK"
+    
 def get_month_records(user_id, month_prefix):
     all_rows = sheet.get_all_values()[1:]
     records = []
