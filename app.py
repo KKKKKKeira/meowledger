@@ -14,6 +14,7 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv("CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("CHANNEL_SECRET"))
+user_state = {}
 
 gcred_json_str = os.getenv("GCRED_JSON")
 with open("gcred.json", "w") as f:
