@@ -1,3 +1,5 @@
+# 喵了個帳：LINE 記帳貓貓 Bot 完整程式碼（含提醒語、指令引導、剩餘預算計算）
+
 import os
 import gspread
 import json
@@ -100,40 +102,40 @@ def handle_message(event):
     msg = event.message.text.strip()
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
+    lower_msg = msg.lower()
 
-    # 查詢明細
-    if re.search(r"(查詢|明細|帳目|看一下)", msg):
-        match = re.search(r"(\d{4})-(\d{2})", msg)
-        month_prefix = match.group() if match else year_month
-        income, expense, budget, records = get_month_records(uid, month_prefix)
+    # 功能選單選取後處理
+    if lower_msg in ["支出", "收入"]:
+        kind = "支出" if lower_msg == "支出" else "收入"
+        reply = f"喵～要補{kind}多少呢？輸入格式像是：\n\n`洗頭 300` 或 `2025-04-03 洗頭 300`\n\n項目可以不填，會自動記成「懶得寫」喵！"
+
+    elif lower_msg in ["預算"]:
+        reply = "喵～請輸入本月預算金額（直接輸入數字就可以囉）"
+
+    elif lower_msg in ["看明細"]:
+        income, expense, budget, records = get_month_records(uid, year_month)
         reply = format_monthly_report(income, expense, budget, records)
+        reply += "\n\n如果要看其他月份可以輸入「2025-03」這樣的格式喵～\n如果要刪除，輸入像是「刪除第 1.2.3 筆」就可以了喵！"
 
-    # 預算設定（模糊抓）
-    elif "預算" in msg:
-        match = re.search(r"預算\s*(\d+)", msg)
-        if match:
-            amount = match.group(1)
-            sheet.append_row([today, "預算", "本月預算", amount, uid])
-            reply = f"喵～我幫妳把這個月的預算記成 {amount} 元了！"
+    elif lower_msg in ["剩餘預算"]:
+        _, expense, budget, _ = get_month_records(uid, year_month)
+        if budget:
+            remain = budget - expense
+            percent = 100 - round(expense / budget * 100)
+            reply = f"喵～本月還剩 {remain} 元可用（{percent}%）喔！撐住～"
         else:
-            reply = "請用「預算 20000」這樣的格式喵～"
+            reply = "喵？妳還沒設定預算喵～請先設定預算才看的到剩下多少錢喔！"
 
-    # 全部刪除
-    elif msg == "全部刪除":
-        all_rows = sheet.get_all_values()
-        deleted = 0
-        for i in range(len(all_rows)-1, 0, -1):
-            row = all_rows[i]
-            if row[4] == uid and row[0].startswith(year_month) and row[1] in ["收入", "支出"]:
-                sheet.delete_rows(i+1)
-                deleted += 1
-        if deleted:
-            reply = "喵？真的全部都不要了嗎…好啦，我幫妳清空這個月的紀錄了（預算我先留著喔）"
-        else:
-            reply = "這個月好像沒有資料可以刪喵～"
+    elif lower_msg in ["修改/刪除"]:
+        income, expense, budget, records = get_month_records(uid, year_month)
+        reply = format_monthly_report(income, expense, budget, records)
+        reply += "\n\n喵～要刪哪幾筆呢？輸入像是「刪除第 1.2.3 筆」就可以囉～\n如果要刪光光也可以輸入「全部刪除」喵！"
 
-    # 刪除多筆
-    elif msg.startswith("刪除"):
+    elif lower_msg.isdigit() and context.get(uid) == "預算":
+        sheet.append_row([today, "預算", "本月預算", msg, uid])
+        reply = f"喵～我幫妳把這個月的預算記成 {msg} 元了！"
+
+    elif re.match(r"刪除第[\d\s,\.]+筆", msg):
         numbers = re.findall(r"\d+", msg)
         all_rows = sheet.get_all_values()
         user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
@@ -150,12 +152,20 @@ def handle_message(event):
             nums = [str(n) for n, _ in to_delete]
             reply = f"我幫妳刪掉第 {', '.join(nums)} 筆紀錄了喵～"
         else:
-            reply = "找不到這些筆數喵，請再確認一下～"
+            reply = "喵？找不到這些筆數，請再確認一下～"
 
-    # 記帳邏輯
-    else:
+    elif lower_msg == "全部刪除":
+        all_rows = sheet.get_all_values()
+        user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
+                     if row[4] == uid and row[0].startswith(year_month) and row[1] != "預算"]
+        for i, _ in reversed(user_rows):
+            sheet.delete_rows(i)
+        reply = "喵～我幫妳把這個月的紀錄通通刪光光了喵！希望妳沒有後悔！"
+
+    elif re.match(r"\d{4}-\d{2}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}|\D+\s*\d+", msg):
         date = today
-        kind, item, amount = None, "懶得寫", None
+        kind, item, amount = "支出", "懶得寫", None
+
         date_match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2})", msg)
         if date_match:
             date_str = date_match.group()
@@ -166,45 +176,25 @@ def handle_message(event):
             else:
                 date = date_str
 
-        if re.match(r"^[-+]\d+", msg):
-            kind = "收入" if msg.startswith("+") else "支出"
-            amount = int(msg)
-        elif re.match(r"^[一-龥]+\s*[-+]\d+", msg):
-            parts = msg.split()
+        parts = msg.split()
+        if len(parts) == 2 and parts[1].isdigit():
             item = parts[0]
             amount = int(parts[1])
-            kind = "收入" if "+" in parts[1] else "支出"
-        elif re.match(r"^[一-龥]+\d+", msg):
-            match = re.match(r"([一-龥]+)(\d+)", msg)
-            item = match.group(1)
-            amount = int(match.group(2))
-            kind = "支出"
-            reply = f"這應該是支出吧？如果是收入再請輸入收入兩個字我就知道囉！\n我先幫妳記下來囉：{item} -{amount} 元"
-            sheet.append_row([date, kind, item, amount, uid])
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-            return
-        else:
-            parts = msg.split()
-            if parts[0] in ["支出", "收入"]:
-                kind = parts[0]
-                if len(parts) == 2:
-                    amount = int(parts[1])
-                elif len(parts) >= 3 and parts[2].isdigit():
-                    item = parts[1]
-                    amount = int(parts[2])
-            elif len(parts) == 2 and parts[0].isdigit():
-                amount = int(parts[0])
-                item = parts[1]
-                kind = "支出"
-
-        if kind and amount:
-            sheet.append_row([date, kind, item, abs(amount), uid])
-            if kind == "收入":
-                reply = f"又賺了多少錢啊喵：收入 {item} {abs(amount)} 元"
-            else:
-                reply = f"{random.choice(success_quotes)}：{kind} {item} {abs(amount)} 元"
+        elif len(parts) == 1 and parts[0].isdigit():
+            amount = int(parts[0])
         else:
             reply = "喵？這筆我看不懂，要不要再試一次～"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+            return
+
+        sheet.append_row([date, kind, item, amount, uid])
+        if kind == "收入":
+            reply = f"又賺了多少錢啊喵～：{item} +{amount} 元"
+        else:
+            reply = f"{random.choice(success_quotes)}：{kind} {item} -{amount} 元"
+
+    else:
+        reply = "喵？我不太懂你說什麼，可以點圖文選單再來一次喔～"
 
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
