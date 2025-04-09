@@ -121,6 +121,25 @@ def handle_message(event):
             "`4/2 加班費 2000` 或 `2025-04-02 2000`\n"
             "項目不填的話我就當作是「懶得寫」的收入喔喵～"
         )
+    elif msg in ["修改", "刪除", "修改/刪除", "Edit"]:
+        reply = "喵～要刪哪幾筆呢？輸入像是「刪除1.2.3筆」這樣的格式就可以囉～\n如果要刪光光也可以輸入「全部刪除」喵！"
+
+    elif msg in ["預算", "設定預算", "Budget"]:
+        reply = "喵～請輸入本月預算金額（直接輸入數字就可以囉）"
+
+    elif msg in ["剩餘預算", "剩下多少", "Remain"]:
+        income, expense, budget, _ = get_month_records(uid, year_month)
+        if budget:
+        remain = budget - expense
+        percent = 100 - round(expense / budget * 100)
+        reply = f"喵～本月還剩 {remain} 元可用（{percent}%）喔！撐住～"
+    else:
+        reply = "喵～你還沒設定預算喔，要不要先設定一下呀？"
+
+    elif msg in ["看明細", "明細", "Details"]:
+        income, expense, budget, records = get_month_records(uid, year_month)
+        reply = format_monthly_report(income, expense, budget, records)
+
     elif re.search(r"(查詢|明細|帳目|看一下)", msg):
         match = re.search(r"(\d{4})-(\d{2})", msg)
         month_prefix = match.group() if match else year_month
