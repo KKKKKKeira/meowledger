@@ -134,8 +134,8 @@ def handle_message(event):
             remain = budget - expense
             percent = 100 - round(expense / budget * 100)
             reply = f"喵～本月還剩 {remain} 元可用（{percent}%）喔！撐住～"
-    else:
-        reply = "喵～你還沒設定預算喔，要不要先設定一下呀？"
+        else:
+            reply = "喵～你還沒設定預算喔，要不要先設定一下呀？"
 
     elif msg in ["看明細", "明細", "Details"]:
         income, expense, budget, records = get_month_records(uid, year_month)
