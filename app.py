@@ -38,6 +38,10 @@ def webhook():
         abort(400)
     return "OK"
 
+@app.route("/", methods=["GET", "HEAD"])
+def home():
+    return "喵～我還活著！", 200
+
 def get_month_records(user_id, month_prefix):
     all_rows = sheet.get_all_values()[1:]
     records = []
