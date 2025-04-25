@@ -26,8 +26,6 @@ credentials = ServiceAccountCredentials.from_json_keyfile_name("gcred.json", sco
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(os.getenv("SHEET_ID")).sheet1
 
-user_states = {}
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers["X-Line-Signature"]
@@ -64,6 +62,7 @@ def get_month_records(user_id, month_prefix):
 
     budget = budget_rows[-1] if budget_rows else 0
     return income, expense, budget, records
+
 def format_monthly_report(income, expense, budget, records):
     lines = []
     for i, (date, kind, item, amount) in enumerate(records):
@@ -106,6 +105,7 @@ over_80_quotes = [
     "剩沒幾天啦喵…我們一起吃吐司皮撐過去吧 🍞",
     "看來只剩空氣和遺憾能當宵夜了喵…"
 ]
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     uid = event.source.user_id
@@ -113,16 +113,13 @@ def handle_message(event):
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
 
-    global current_mode
     if uid not in user_state:
         user_state[uid] = None
     state = user_state[uid]
 
-    # 切換狀態
     if msg in ["支出", "收入"]:
         user_state[uid] = msg
-        kind = msg
-        tip = "支出" if kind == "支出" else "收入"
+        tip = "支出" if msg == "支出" else "收入"
         hint = "洗頭 300 或 2025-04-03 洗頭 300"
         return line_bot_api.reply_message(
             event.reply_token,
@@ -143,14 +140,15 @@ def handle_message(event):
         reply += "\n\n要刪除哪筆請用「刪除第 1 2 3 筆」或「刪除全部」喵～"
         return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
-    elif msg in ["剩餘預算"]:
+    elif msg == "剩餘預算":
         income, expense, budget, _ = get_month_records(uid, year_month)
-        remain = budget - expense
-        percent = 0 if budget == 0 else round(remain / budget * 100)
-        return line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"喵～本月還剩 {remain} 元可用（{percent}%）喔！撐住～")
-        )
+        if budget == 0:
+            reply = "這個月還沒設定預算喵～要記得設定嘿！"
+        else:
+            remain = budget - expense
+            percent = round(remain / budget * 100)
+            reply = f"喵～本月剩餘預算：{remain} 元（{percent}%）"
+        return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
     elif msg == "修改/刪除":
         user_state[uid] = "刪除"
@@ -159,7 +157,6 @@ def handle_message(event):
         reply += "\n\n喵～要刪哪幾筆呢？輸入像是「刪除第 1.2.3 筆」的格式就可以囉～\n如果要刪光光也可以輸入「全部刪除」喵！"
         return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
-    # 處理「預算」模式
     if state == "預算" and re.fullmatch(r"\d+", msg):
         sheet.append_row([today, "預算", "本月預算", msg, uid])
         user_state[uid] = None
@@ -167,7 +164,6 @@ def handle_message(event):
             event.reply_token, TextSendMessage(text=f"喵～我幫妳把這個月的預算記成 {msg} 元了！")
         )
 
-    # 處理「刪除」指令
     if state == "刪除" and "刪除" in msg:
         numbers = re.findall(r"\d+", msg)
         all_rows = sheet.get_all_values()
@@ -201,14 +197,13 @@ def handle_message(event):
             reply = "喵？我不太懂你說什麼，可以點圖文選單再來一次喔～"
 
         return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-    # 處理記帳輸入
+
     kind = user_state.get(uid)
     if kind in ["支出", "收入"]:
         date = today
         item = "懶得寫"
         amount = None
 
-        # 日期格式：2025-04-09 或 4/9
         date_match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2})", msg)
         if date_match:
             date_str = date_match.group()
@@ -219,7 +214,6 @@ def handle_message(event):
             else:
                 date = date_str
 
-        # 格式判斷：項目+金額（可無空格）
         match = re.match(r"^([^\d\s]+)?\s?(\d+)$", msg)
         if match:
             if match.group(1):
@@ -228,7 +222,7 @@ def handle_message(event):
 
         if amount:
             sheet.append_row([date, kind, item, amount, uid])
-            user_state[uid] = kind  # 維持在支出或收入模式，方便輸入多筆
+            user_state[uid] = kind
             if kind == "收入":
                 reply = f"{random.choice(income_quotes)}：收入 {item} +{amount} 元"
             else:
@@ -239,10 +233,10 @@ def handle_message(event):
             reply = "喵？這筆我看不懂，要不要再試一次～"
             return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
-    # 如果什麼狀態都不是，就提醒從圖文選單開始
     return line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text="喵？我不太懂你說什麼，可以點圖文選單再來一次喔～")
     )
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
