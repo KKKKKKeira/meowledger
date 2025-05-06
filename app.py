@@ -79,6 +79,30 @@ def format_monthly_report(income, expense, budget, records):
             report += f"\n😿 {random.choice(over_50_quotes)}"
     return report + "\n\n" + detail
 
+def extract_month_queries(text):
+    result = []
+    text = text.replace("月明細", "月")
+    cn2num = {"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,"十一":11,"十二":12,"四月":4,"三月":3,"五月":5,"六月":6,"七月":7,"八月":8,"九月":9,"十月":10,"十一月":11,"十二月":12}
+    all_rows = sheet.get_all_values()[1:]
+    years = sorted(list({row[0][:4] for row in all_rows}))
+    matches = re.findall(r"(20\d{2})[\/-]?(\d{1,2})|((?:20\d{2})?)\s*([一二三四五六七八九十]+|\d{1,2})月?", text)
+
+    for full, m1, y2, m2 in matches:
+        if full and m1:
+            y = full
+            m = f"{int(m1):02d}"
+            result.append(f"{y}-{m}")
+        elif m2:
+            m = cn2num.get(m2, None) if m2 in cn2num else int(m2)
+            m = f"{int(m):02d}"
+            y = y2 if y2 else None
+            if y:
+                result.append(f"{y}-{m}")
+            else:
+                for year in years:
+                    result.append(f"{year}-{m}")
+    return result
+
 success_quotes = [
     "喵：記好了，不要到月底又說錢怎麼不見了嘿。",
     "好啦好啦，錢花了我也只能記下來了喵…",
@@ -112,6 +136,10 @@ def handle_message(event):
     msg = event.message.text.strip()
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
+    
+    if uid not in user_state:
+        user_state[uid] = None
+    state = user_state[uid]
         # 查詢所有年份的某月份紀錄（例如輸入「3月」會抓 2023-03、2024-03 等）
     if re.fullmatch(r"0?\d{1,2}月", msg):
         target_m = int(re.match(r"0?(\d{1,2})月", msg).group(1))
@@ -158,12 +186,24 @@ def handle_message(event):
             TextSendMessage(text="喵～請輸入本月預算金額（直接輸入數字就可以囉）")
         )
 
-    elif msg in ["明細", "看明細"]:
+    if msg in ["明細", "看明細"]:
         income, expense, budget, records = get_month_records(uid, year_month)
         user_state[uid] = "刪除"
         reply = format_monthly_report(income, expense, budget, records)
-        reply += "\n\n要刪除哪筆請用「刪除第 1 2 3 筆」或「刪除全部」喵～"
+        reply += "\n\n要刪除哪筆請用「刪除第 1 2 3 筆」或「刪除全部」喵～\n想看其他月份的明細可以直接輸入『3月』『202504』『4月明細』這些格式喵！"
         return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+
+    if state == "刪除":
+        matched_months = extract_month_queries(msg)
+        if matched_months:
+            replies = []
+            for ym in matched_months:
+                income, expense, budget, records = get_month_records(uid, ym)
+                report = format_monthly_report(income, expense, budget, records)
+                replies.append(f"【{ym}】\n" + report)
+            for reply in replies:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+            return
 
     elif msg == "剩餘預算":
         income, expense, budget, _ = get_month_records(uid, year_month)
@@ -189,11 +229,6 @@ def handle_message(event):
             event.reply_token, TextSendMessage(text=f"喵～我幫妳把這個月的預算記成 {msg} 元了！")
         )
 
-    if state == "刪除" and "刪除" in msg:
-        numbers = re.findall(r"\d+", msg)
-        all_rows = sheet.get_all_values()
-        user_rows = [(i, row) for i, row in enumerate(all_rows[1:], start=2)
-                     if row[4] == uid and row[0].startswith(year_month) and row[1] != "預算"]
 
         if "全部" in msg:
             to_delete = [i for i, _ in user_rows]
