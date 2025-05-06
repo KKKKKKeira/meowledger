@@ -204,7 +204,7 @@ def handle_message(event):
             for reply in replies:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
             return
-
+            
     elif msg == "剩餘預算":
         income, expense, budget, _ = get_month_records(uid, year_month)
         if budget == 0:
