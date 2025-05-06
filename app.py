@@ -112,6 +112,31 @@ def handle_message(event):
     msg = event.message.text.strip()
     today = datetime.now().strftime("%Y-%m-%d")
     year_month = today[:7]
+        # 查詢所有年份的某月份紀錄（例如輸入「3月」會抓 2023-03、2024-03 等）
+    if re.fullmatch(r"0?\d{1,2}月", msg):
+        target_m = int(re.match(r"0?(\d{1,2})月", msg).group(1))
+        all_rows = sheet.get_all_values()[1:]
+        matched_years = set()
+        for row in all_rows:
+            date_str = row[0]
+            if not re.match(r"\d{4}-\d{2}-\d{2}", date_str):
+                continue
+            y, m, _ = date_str.split("-")
+            if int(m) == target_m and row[4] == uid:
+                matched_years.add(y)
+
+        if not matched_years:
+            reply = f"喵？查不到任何 {target_m} 月的紀錄耶～"
+            return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+
+        replies = []
+        for y in sorted(matched_years, reverse=True):  # 最新年份排前面
+            prefix = f"{y}-{target_m:02d}"
+            income, expense, budget, records = get_month_records(uid, prefix)
+            report = format_monthly_report(income, expense, budget, records)
+            replies.append(TextSendMessage(text=f"【{y} 年 {target_m} 月】\n" + report))
+
+        return line_bot_api.reply_message(event.reply_token, replies)
 
     if uid not in user_state:
         user_state[uid] = None
